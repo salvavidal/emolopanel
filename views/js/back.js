@@ -33,7 +33,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateEmployeeList(onlyCommercials) {
-        const url = new URL(document.querySelector('[name="adminmodules"]').action);
+        // Obtener la URL base del data attribute
+        const baseUrl = document.querySelector('#gestioncomerciales_commercial_list').dataset.ajaxUrl;
+        
+        if (!baseUrl) {
+            console.error('URL de AJAX no encontrada');
+            return;
+        }
+
+        const url = new URL(baseUrl);
         url.searchParams.append('ajax', '1');
         url.searchParams.append('action', 'getEmployees');
         url.searchParams.append('only_commercials', onlyCommercials ? '1' : '0');
