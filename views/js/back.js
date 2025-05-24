@@ -24,12 +24,24 @@
 */
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Código existente para los botones de filtrado
     const showAllBtn = document.getElementById('showAllEmployees');
     const showCommercialsBtn = document.getElementById('showOnlyCommercials');
     
     if (showAllBtn && showCommercialsBtn) {
         showAllBtn.addEventListener('click', () => updateEmployeeList(false));
         showCommercialsBtn.addEventListener('click', () => updateEmployeeList(true));
+    }
+
+    // Nuevo código para el checkbox "Seleccionar todos"
+    const checkAllBox = document.getElementById('checkAll');
+    if (checkAllBox) {
+        checkAllBox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('input[name="id_clients[]"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = checkAllBox.checked;
+            });
+        });
     }
 
     function updateEmployeeList(onlyCommercials) {
