@@ -24,16 +24,17 @@
 */
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Código existente para los botones de filtrado
+    // Código para los botones de filtrado
     const showAllBtn = document.getElementById('showAllEmployees');
     const showCommercialsBtn = document.getElementById('showOnlyCommercials');
+    const listContainer = document.getElementById('gestioncomerciales_commercial_list');
     
-    if (showAllBtn && showCommercialsBtn) {
+    if (showAllBtn && showCommercialsBtn && listContainer) {
         showAllBtn.addEventListener('click', () => updateEmployeeList(false));
         showCommercialsBtn.addEventListener('click', () => updateEmployeeList(true));
     }
 
-    // Nuevo código para el checkbox "Seleccionar todos"
+    // Código para el checkbox "Seleccionar todos"
     const checkAllBox = document.getElementById('checkAll');
     if (checkAllBox) {
         checkAllBox.addEventListener('change', function() {
@@ -45,8 +46,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateEmployeeList(onlyCommercials) {
+        if (!listContainer) return;
+        
         // Obtener la URL base del data attribute
-        const baseUrl = document.querySelector('#gestioncomerciales_commercial_list').dataset.ajaxUrl;
+        const baseUrl = listContainer.dataset.ajaxUrl;
         
         if (!baseUrl) {
             console.error('URL de AJAX no encontrada');
@@ -104,5 +107,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Cargar solo comerciales por defecto al iniciar
-    updateEmployeeList(true);
+    if (listContainer) {
+        updateEmployeeList(true);
+    }
 });

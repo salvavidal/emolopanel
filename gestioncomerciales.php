@@ -172,10 +172,24 @@ class Gestioncomerciales extends Module
         $helper->token = Tools::getAdminTokenLite('AdminModules');
         $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
 
+        // Añadir botones de filtrado
+        $list = '<div class="panel">
+            <div class="panel-heading">
+                ' . $this->l('Listado de Comerciales (Empleados)') . '
+                <div class="btn-group pull-right">
+                    <button type="button" id="showAllEmployees" class="btn btn-default">
+                        <i class="icon-list"></i> ' . $this->l('Ver todos los empleados') . '
+                    </button>
+                    <button type="button" id="showOnlyCommercials" class="btn btn-primary">
+                        <i class="icon-user"></i> ' . $this->l('Ver solo comerciales') . '
+                    </button>
+                </div>
+            </div>';
+
         // Añadir la URL de AJAX como atributo data al contenedor
-        $list = '<div id="' . $helper->table . '" data-ajax-url="' . $this->context->link->getAdminLink('AdminModules') . '&configure=' . $this->name . '">';
+        $list .= '<div id="' . $helper->table . '" data-ajax-url="' . $this->context->link->getAdminLink('AdminModules') . '&configure=' . $this->name . '">';
         $list .= $helper->generateList($commercials, $fields_list);
-        $list .= '</div>';
+        $list .= '</div></div>';
 
         return $list;
     }
