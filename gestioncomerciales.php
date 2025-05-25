@@ -34,13 +34,22 @@ class Gestioncomerciales extends Module
     public function install()
     {
         include(dirname(__FILE__).'/sql/install.php');
-        return parent::install() && $this->registerHook('header');
+        return parent::install() && 
+               $this->registerHook('header') &&
+               $this->registerHook('backOfficeHeader');
     }
 
     public function uninstall()
     {
         include(dirname(__FILE__).'/sql/uninstall.php');
         return parent::uninstall();
+    }
+
+    public function hookBackOfficeHeader()
+    {
+        if (Tools::getValue('configure') == $this->name) {
+            $this->context->controller->addJS($this->_path.'views/js/back.js');
+        }
     }
 
     public function getContent()
@@ -127,5 +136,161 @@ class Gestioncomerciales extends Module
         return $output;
     }
 
-    // ... [resto de métodos sin cambios]
+    private function renderList()
+    {
+        $commercials = $this->getAllCommercials();
+
+        $fields_list = [
+            'id' => [
+                'title' => $this->l('ID'),
+                'align' => 'center',
+                'class' => 'fixed-width-xs'
+            ],
+            'firstname' => [
+                'title' => $this->l('Nombre'),
+                'type' => 'text'
+            ],
+            'lastname' => [
+                'title' => $this->l('Apellido'),
+                'type' => 'text'
+            ],
+            'profile' => [
+                'title' => $this->l('Perfil'),
+                'type' => 'text',
+                'align' => 'center'
+            ]
+        ];
+
+        $helper = new HelperList();
+        $helper->shopLinkType = '';
+        $helper->simple_header = true;
+        $helper->identifier = 'id';
+        $helper->actions = ['edit', 'delete'];
+        $helper->show_toolbar = true;
+        $helper->title = $this->l('Listado de Comerciales (Empleados)');
+        $helper->table = $this->name . '_commercial_list';
+        $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+
+        $list = '<div class="panel">
+            <div class="panel-heading">
+                ' . $this->l('Listado de Comerciales') . '
+                <div class="btn-group pull-right">
+                    <button type="button" id="showAllEmployees" class="btn btn-default">
+                        <i class="icon-list"></i> ' . $this->l('Ver todos los empleados') . '
+                    </button>
+                    <button type="button" id="showOnlyCommercials" class="btn btn-primary">
+                        <i class="icon-user"></i> ' . $this->l('Ver solo comerciales') . '
+                    </button>
+                </div>
+            </div>
+            <div id="' . $helper->table . '" data-ajax-url="' . $this->context->link->getAdminLink('AdminModules') . '&configure=' . $this->name . '">';
+        $list .= $helper->generateList($commercials, $fields_list);
+        $list .= '</div></div>';
+
+        return $list;
+    }
+
+    private function renderClientCommercialList()
+    {
+        $clients = $this->getClientCommercialList();
+
+        foreach ($clients as &$client) {
+            $client['commercial_name'] = (!empty($client['commercial_firstname']) && !empty($client['commercial_lastname']))
+                ? trim($client['commercial_firstname'] . ' ' . $client['commercial_lastname'])
+                : $this->l('Sin asignar');
+        }
+
+        $fields_list = [
+            'id_customer' => [
+                'title' => $this->l('ID Cliente'),
+                'align' => 'center',
+                'class' => 'fixed-width-xs',
+            ],
+            'firstname' => [
+                'title' => $this->l('Nombre'),
+                'type' => 'text',
+            ],
+            'lastname' => [
+                'title' => $this->l('Apellido'),
+                'type' => 'text',
+            ],
+            'commercial_name' => [
+                'title' => $this->l('Comercial Asignado'),
+                'type' => 'text',
+                'align' => 'center',
+            ],
+        ];
+
+        $helper = new HelperList();
+        $helper->shopLinkType = '';
+        $helper->simple_header = true;
+        $helper->identifier = 'id_customer';
+        $helper->actions = [];
+        $helper->show_toolbar = false;
+        $helper->title = $this->l('Listado de Clientes y Comerciales Asignados');
+        $helper->table = $this->name . '_client_commercial_list';
+        $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+
+        return $helper->generateList($clients, $fields_list);
+    }
+
+    private function processAssignClients()
+    {
+        $id_comercial = (int)Tools::getValue('id_comercial');
+        $id_clients = Tools::getValue('id_clients');
+
+        if ($id_comercial && !empty($id_clients)) {
+            foreach ($id_clients as $id_cliente) {
+                Db::getInstance()->delete('comerciales_clientes', 'id_cliente = ' . (int)$id_cliente);
+                Db::getInstance()->insert('comerciales_clientes', [
+                    'id_comercial' => (int)$id_comercial,
+                    'id_cliente' => (int)$id_cliente
+                ]);
+            }
+            $this->context->controller->confirmations[] = $this->l('Clientes asignados correctamente al comercial.');
+        } else {
+            $this->context->controller->errors[] = $this->l('Selecciona un comercial y al menos un cliente.');
+        }
+    }
+
+    private function getAllCommercials()
+    {
+        $id_lang = (int)$this->context->language->id;
+        $sql = '
+            SELECT 
+                e.id_employee AS id, 
+                e.firstname, 
+                e.lastname, 
+                pl.name AS profile
+            FROM ' . _DB_PREFIX_ . 'employee e
+            LEFT JOIN ' . _DB_PREFIX_ . 'profile_lang pl ON e.id_profile = pl.id_profile AND pl.id_lang = ' . $id_lang . '
+            ORDER BY e.lastname ASC, e.firstname ASC
+        ';
+        return Db::getInstance()->executeS($sql);
+    }
+
+    private function getAllClients()
+    {
+        $sql = 'SELECT `id_customer`, `firstname`, `lastname`, `email` FROM `' . _DB_PREFIX_ . 'customer`';
+        return Db::getInstance()->executeS($sql);
+    }
+
+    private function getClientCommercialList()
+    {
+        $sql = '
+            SELECT 
+                c.id_customer, 
+                c.firstname, 
+                c.lastname, 
+                e.firstname AS commercial_firstname, 
+                e.lastname AS commercial_lastname
+            FROM ' . _DB_PREFIX_ . 'customer c
+            LEFT JOIN ' . _DB_PREFIX_ . 'comerciales_clientes cc ON c.id_customer = cc.id_cliente
+            LEFT JOIN ' . _DB_PREFIX_ . 'employee e ON cc.id_comercial = e.id_employee
+            ORDER BY c.lastname ASC, c.firstname ASC
+        ';
+        return Db::getInstance()->executeS($sql);
+    }
 }
