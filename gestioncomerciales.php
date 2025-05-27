@@ -5,6 +5,23 @@
 * NOTICE OF LICENSE
 *
 * This source file is subject to the Academic Free License (AFL 3.0)
+* that is bundled with this package in the file LICENSE.txt.
+* It is also available through the world-wide-web at this URL:
+* http://opensource.org/licenses/afl-3.0.php
+* If you did not receive a copy of the license and are unable to
+* obtain it through the world-wide-web, please send an email
+* to license@prestashop.com so we can send you a copy immediately.
+*
+* DISCLAIMER
+*
+* Do not edit or add to this file if you wish to upgrade PrestaShop to newer
+* versions in the future. If you wish to customize PrestaShop for your
+* needs please refer to http://www.prestashop.com for more information.
+*
+*  @author    PrestaShop SA <contact@prestashop.com>
+*  @copyright 2007-2024 PrestaShop SA
+*  @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+*  International Registered Trademark & Property of PrestaShop SA
 */
 
 if (!defined('_PS_VERSION_')) {
@@ -13,7 +30,7 @@ if (!defined('_PS_VERSION_')) {
 
 class Gestioncomerciales extends Module
 {
-    protected $fields_value = [];
+    protected $fields_value = []; // Declaración de la propiedad para evitar errores en PHP 8.2+
 
     public function __construct()
     {
@@ -33,7 +50,7 @@ class Gestioncomerciales extends Module
 
     public function install()
     {
-        include(dirname(__FILE__).'/sql/install.php');
+        //include(dirname(__FILE__).'/sql/install.php');
         return parent::install() && 
                $this->registerHook('header') &&
                $this->registerHook('backOfficeHeader');
@@ -41,200 +58,313 @@ class Gestioncomerciales extends Module
 
     public function uninstall()
     {
-        include(dirname(__FILE__).'/sql/uninstall.php');
+        //include(dirname(__FILE__).'/sql/uninstall.php');
         return parent::uninstall();
     }
-
-    public function hookBackOfficeHeader()
+	
+	public function hookBackOfficeHeader()
     {
         if (Tools::getValue('configure') == $this->name) {
             $this->context->controller->addJS($this->_path.'views/js/back.js');
+			$this->context->controller->addCSS($this->_path.'views/css/back.css');
         }
     }
 
-    public function getContent()
-    {
-        $token = Tools::getAdminTokenLite('AdminModules');
+public function getContent()
+{
+    $token = Tools::getAdminTokenLite('AdminModules');
 
-        if (Tools::isSubmit('submitAssignClients')) {
-            $this->processAssignClients();
-        }
+    // Manejar solicitud AJAX
+    if (Tools::getValue('ajax') == '1' && Tools::getValue('action') == 'getEmployees') {
+        $onlyCommercials = Tools::getValue('only_commercials') == '1';
+        $employees = $this->getAllCommercials($onlyCommercials);
+        
+        header('Content-Type: application/json');
+        echo json_encode($employees);
+        exit;
+    }
 
-        // Obtener datos de comerciales y clientes
-        $commercials = $this->getAllCommercials();
-        $clients = $this->getAllClients();
+    if (Tools::isSubmit('submitAssignClients')) {
+        $this->processAssignClients();
+    }
 
-        // Asignar variables para la plantilla
-        $this->context->smarty->assign([
-            'commercials' => $commercials,
-            'module_dir' => $this->_path,
-            'currentIndex' => AdminController::$currentIndex . '&configure=' . $this->name,
-            'token' => $token,
-        ]);
+    // Obtener datos de comerciales (solo comerciales por defecto) y clientes
+    $commercials = $this->getAllCommercials(true); // true = solo comerciales para el listado
+    $allEmployees = $this->getAllCommercials(false); // false = todos los empleados para el desplegable
+    $clients = $this->getAllClients();
 
-        // Renderizar el listado de comerciales y el formulario unificado de asignación
-        $output = $this->renderList();
-        $output .= '<div class="panel">
-            <div class="panel-heading">
-                ' . $this->l('Asignación de Clientes a Comercial') . '
-            </div>
-            <div class="form-wrapper">
-                <form method="post" class="form-horizontal">
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">' . $this->l('Seleccionar Comercial') . '</label>
-                        <div class="col-lg-9">
-                            <select name="id_comercial" class="form-control" required>
-                                <option value="">' . $this->l('Seleccione un comercial') . '</option>';
-                                foreach ($commercials as $commercial) {
-                                    $output .= '<option value="' . $commercial['id'] . '">' . 
-                                        $commercial['firstname'] . ' ' . $commercial['lastname'] . 
-                                    '</option>';
+    // Asignar variables para la plantilla
+    $this->context->smarty->assign([
+        'commercials' => $commercials,
+        'allEmployees' => $allEmployees, // Todos los empleados para el desplegable
+        'module_dir' => $this->_path,
+        'currentIndex' => AdminController::$currentIndex . '&configure=' . $this->name,
+        'token' => $token,
+    ]);
+
+    // Renderizar el listado de comerciales y el formulario unificado de asignación
+    $output = $this->renderList();
+    $output .= '<div class="panel">
+        <div class="panel-heading">
+            ' . $this->l('Asignación de Clientes a Comercial') . '
+        </div>
+        <div class="form-wrapper">
+            <form method="post" class="form-horizontal">
+                <div class="form-group">
+                    <label class="control-label col-lg-3">' . $this->l('Seleccionar Empleado') . '</label>
+                    <div class="col-lg-9">
+                        <select name="id_comercial" class="form-control" required>
+                            <option value="">' . $this->l('Seleccione un empleado') . '</option>';
+                            foreach ($allEmployees as $employee) {
+                                $output .= '<option value="' . $employee['id'] . '">' . 
+                                    $employee['firstname'] . ' ' . $employee['lastname'] . ' (' . $employee['profile'] . ')' .
+                                '</option>';
+                            }
+    $output .= '</select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="control-label col-lg-3">' . $this->l('Clientes Disponibles') . '</label>
+                    <div class="col-lg-9">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th><input type="checkbox" id="checkAll" /></th>
+                                        <th>' . $this->l('ID') . '</th>
+                                        <th>' . $this->l('Nombre') . '</th>
+                                        <th>' . $this->l('Apellido') . '</th>
+                                        <th>' . $this->l('Email') . '</th>
+                                    </tr>
+                                </thead>
+                                <tbody>';
+                                foreach ($clients as $client) {
+                                    $output .= '<tr>
+                                        <td><input type="checkbox" name="id_clients[]" value="' . $client['id_customer'] . '" /></td>
+                                        <td>' . $client['id_customer'] . '</td>
+                                        <td>' . $client['firstname'] . '</td>
+                                        <td>' . $client['lastname'] . '</td>
+                                        <td>' . $client['email'] . '</td>
+                                    </tr>';
                                 }
-        $output .= '</select>
+    $output .= '</tbody>
+                            </table>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="control-label col-lg-3">' . $this->l('Clientes Disponibles') . '</label>
-                        <div class="col-lg-9">
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th><input type="checkbox" id="checkAll" /></th>
-                                            <th>' . $this->l('ID') . '</th>
-                                            <th>' . $this->l('Nombre') . '</th>
-                                            <th>' . $this->l('Apellido') . '</th>
-                                            <th>' . $this->l('Email') . '</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>';
-                                    foreach ($clients as $client) {
-                                        $output .= '<tr>
-                                            <td><input type="checkbox" name="id_clients[]" value="' . $client['id_customer'] . '" /></td>
-                                            <td>' . $client['id_customer'] . '</td>
-                                            <td>' . $client['firstname'] . '</td>
-                                            <td>' . $client['lastname'] . '</td>
-                                            <td>' . $client['email'] . '</td>
-                                        </tr>';
-                                    }
-        $output .= '</tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="panel-footer">
-                        <button type="submit" name="submitAssignClients" class="btn btn-default pull-right">
-                            <i class="process-icon-save"></i> ' . $this->l('Guardar') . '
+                </div>
+                <div class="panel-footer">
+                    <button type="submit" name="submitAssignClients" class="btn btn-default pull-right">
+                        <i class="process-icon-save"></i> ' . $this->l('Guardar') . '
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>';
+
+    $output .= $this->renderClientCommercialList();
+
+    return $output;
+}
+
+
+  private function renderList()
+{
+    // Cargar solo comerciales por defecto (no todos los empleados)
+    $commercials = $this->getAllCommercials(true);
+
+    $fields_list = [
+        'id' => [
+            'title' => $this->l('ID'),
+            'align' => 'center',
+            'class' => 'fixed-width-xs'
+        ],
+        'firstname' => [
+            'title' => $this->l('Nombre'),
+            'type' => 'text'
+        ],
+        'lastname' => [
+            'title' => $this->l('Apellido'),
+            'type' => 'text'
+        ],
+        'profile' => [
+            'title' => $this->l('Perfil'),
+            'type' => 'text',
+            'align' => 'center'
+        ]
+    ];
+
+    $helper = new HelperList();
+    $helper->shopLinkType = '';
+    $helper->simple_header = true;
+    $helper->identifier = 'id';
+    $helper->actions = ['edit', 'delete'];
+    $helper->show_toolbar = true;
+    $helper->title = $this->l('Listado de Comerciales (Empleados)');
+    $helper->table = $this->name . '_commercial_list';
+    $helper->token = Tools::getAdminTokenLite('AdminModules');
+    $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+
+    $list = '<div class="panel">
+        <div class="panel-heading clearfix">
+            <i class="icon-user"></i> ' . $this->l('Listado de Comerciales (Empleados)') . '
+        </div>
+        <div class="panel-body">
+            <div class="row" style="margin-bottom: 15px;">
+                <div class="col-md-12">
+                    <div class="btn-group pull-right" role="group">
+                        <button type="button" id="showOnlyCommercials" class="btn btn-sm btn-primary" style="border-radius: 4px 0 0 4px;">
+                            <i class="icon-user"></i> ' . $this->l('Solo Comerciales') . '
+                        </button>
+                        <button type="button" id="showAllEmployees" class="btn btn-sm btn-default" style="border-radius: 0 4px 4px 0; margin-left: -1px;">
+                            <i class="icon-group"></i> ' . $this->l('Todos los Empleados') . '
                         </button>
                     </div>
-                </form>
+                    <div class="clearfix"></div>
+                </div>
             </div>
-        </div>';
+            <div id="' . $helper->table . '" data-ajax-url="' . $this->context->link->getAdminLink('AdminModules') . '&configure=' . $this->name . '">';
+    $list .= $helper->generateList($commercials, $fields_list);
+    $list .= '</div>
+        </div>
+    </div>';
 
-        $output .= $this->renderClientCommercialList();
+    return $list;
+}
+
+    private function renderAssignForm($commercials, $clients)
+    {
+        // Preparar opciones de comerciales para el select
+        $commercial_options = [];
+        foreach ($commercials as $commercial) {
+            $commercial_options[] = [
+                'id_option' => $commercial['id'],
+                'name' => $commercial['firstname'] . ' ' . $commercial['lastname']
+            ];
+        }
+
+        // Configurar los campos del formulario
+        $fields_form = [
+            'form' => [
+                'legend' => [
+                    'title' => $this->l('Asignar Clientes a Comercial'),
+                    'icon' => 'icon-user'
+                ],
+                'input' => [
+                    [
+                        'type' => 'select',
+                        'label' => $this->l('Selecciona Comercial'),
+                        'name' => 'id_comercial',
+                        'required' => true,
+                        'options' => [
+                            'query' => $commercial_options,
+                            'id' => 'id_option',
+                            'name' => 'name'
+                        ]
+                    ]
+                ],
+                'submit' => [
+                    'title' => $this->l('Asignar Clientes'),
+                    'class' => 'btn btn-default pull-right'
+                ]
+            ]
+        ];
+
+        $helper = new HelperForm();
+        $helper->module = $this;
+        $helper->name_controller = $this->name;
+        $helper->identifier = $this->identifier;
+        $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+        $helper->title = $this->displayName;
+        $helper->submit_action = 'submitAssignClients';
+
+        // Valores predeterminados
+        $helper->fields_value = [
+            'id_comercial' => '',
+        ];
+
+        // Generar el formulario y añadir la tabla de clientes
+        $output = $helper->generateForm([$fields_form]);
+        
+        // Añadir la tabla de clientes con checkboxes
+        $output .= '<div class="panel">
+            <div class="panel-heading">' . $this->l('Seleccionar Clientes') . '</div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="checkAll" /></th>
+                            <th>' . $this->l('ID') . '</th>
+                            <th>' . $this->l('Nombre') . '</th>
+                            <th>' . $this->l('Apellido') . '</th>
+                            <th>' . $this->l('Email') . '</th>
+                        </tr>
+                    </thead>
+                    <tbody>';
+
+        foreach ($clients as $client) {
+            $output .= '<tr>
+                <td><input type="checkbox" name="id_clients[]" value="' . $client['id_customer'] . '" /></td>
+                <td>' . $client['id_customer'] . '</td>
+                <td>' . $client['firstname'] . '</td>
+                <td>' . $client['lastname'] . '</td>
+                <td>' . $client['email'] . '</td>
+            </tr>';
+        }
+
+        $output .= '</tbody></table></div></div>';
 
         return $output;
     }
 
-    private function renderList()
-    {
-        $commercials = $this->getAllCommercials();
-
-        $fields_list = [
-            'id' => [
-                'title' => $this->l('ID'),
-                'align' => 'center',
-                'class' => 'fixed-width-xs'
-            ],
-            'firstname' => [
-                'title' => $this->l('Nombre'),
-                'type' => 'text'
-            ],
-            'lastname' => [
-                'title' => $this->l('Apellido'),
-                'type' => 'text'
-            ],
-            'profile' => [
-                'title' => $this->l('Perfil'),
-                'type' => 'text',
-                'align' => 'center'
-            ]
-        ];
-
-        $helper = new HelperList();
-        $helper->shopLinkType = '';
-        $helper->simple_header = true;
-        $helper->identifier = 'id';
-        $helper->actions = ['edit', 'delete'];
-        $helper->show_toolbar = true;
-        $helper->title = $this->l('Listado de Comerciales (Empleados)');
-        $helper->table = $this->name . '_commercial_list';
-        $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
-
-        $list = '<div class="panel">
-            <div class="panel-heading">
-                ' . $this->l('Listado de Comerciales') . '
-                <div class="btn-group pull-right">
-                    <button type="button" id="showAllEmployees" class="btn btn-default">
-                        <i class="icon-list"></i> ' . $this->l('Ver todos los empleados') . '
-                    </button>
-                    <button type="button" id="showOnlyCommercials" class="btn btn-primary">
-                        <i class="icon-user"></i> ' . $this->l('Ver solo comerciales') . '
-                    </button>
-                </div>
-            </div>
-            <div id="' . $helper->table . '" data-ajax-url="' . $this->context->link->getAdminLink('AdminModules') . '&configure=' . $this->name . '">';
-        $list .= $helper->generateList($commercials, $fields_list);
-        $list .= '</div></div>';
-
-        return $list;
-    }
-
     private function renderClientCommercialList()
-    {
-        $clients = $this->getClientCommercialList();
+{
+    $clients = $this->getClientCommercialList();
 
-        foreach ($clients as &$client) {
-            $client['commercial_name'] = (!empty($client['commercial_firstname']) && !empty($client['commercial_lastname']))
-                ? trim($client['commercial_firstname'] . ' ' . $client['commercial_lastname'])
-                : $this->l('Sin asignar');
-        }
-
-        $fields_list = [
-            'id_customer' => [
-                'title' => $this->l('ID Cliente'),
-                'align' => 'center',
-                'class' => 'fixed-width-xs',
-            ],
-            'firstname' => [
-                'title' => $this->l('Nombre'),
-                'type' => 'text',
-            ],
-            'lastname' => [
-                'title' => $this->l('Apellido'),
-                'type' => 'text',
-            ],
-            'commercial_name' => [
-                'title' => $this->l('Comercial Asignado'),
-                'type' => 'text',
-                'align' => 'center',
-            ],
-        ];
-
-        $helper = new HelperList();
-        $helper->shopLinkType = '';
-        $helper->simple_header = true;
-        $helper->identifier = 'id_customer';
-        $helper->actions = [];
-        $helper->show_toolbar = false;
-        $helper->title = $this->l('Listado de Clientes y Comerciales Asignados');
-        $helper->table = $this->name . '_client_commercial_list';
-        $helper->token = Tools::getAdminTokenLite('AdminModules');
-        $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
-
-        return $helper->generateList($clients, $fields_list);
+    foreach ($clients as &$client) {
+        $client['commercial_name'] = (!empty($client['commercial_firstname']) && !empty($client['commercial_lastname']))
+            ? trim($client['commercial_firstname'] . ' ' . $client['commercial_lastname'])
+            : $this->l('Sin asignar');
     }
+
+    $fields_list = [
+        'id_customer' => [
+            'title' => $this->l('ID Cliente'),
+            'align' => 'center',
+            'class' => 'fixed-width-xs',
+        ],
+        'firstname' => [
+            'title' => $this->l('Nombre'),
+            'type' => 'text',
+        ],
+        'lastname' => [
+            'title' => $this->l('Apellido'),
+            'type' => 'text',
+        ],
+        'email' => [
+            'title' => $this->l('Email'),
+            'type' => 'text',
+        ],
+        'commercial_name' => [
+            'title' => $this->l('Comercial Asignado'),
+            'type' => 'text',
+            'align' => 'center',
+        ],
+    ];
+
+    $helper = new HelperList();
+    $helper->shopLinkType = '';
+    $helper->simple_header = true;
+    $helper->identifier = 'id_customer';
+    $helper->actions = [];
+    $helper->show_toolbar = false;
+    $helper->title = $this->l('Listado de Clientes y Comerciales Asignados');
+    $helper->table = $this->name . '_client_commercial_list';
+    $helper->token = Tools::getAdminTokenLite('AdminModules');
+    $helper->currentIndex = AdminController::$currentIndex . '&configure=' . $this->name;
+
+    return $helper->generateList($clients, $fields_list);
+}
 
     private function processAssignClients()
     {
@@ -255,21 +385,28 @@ class Gestioncomerciales extends Module
         }
     }
 
-    private function getAllCommercials()
-    {
-        $id_lang = (int)$this->context->language->id;
-        $sql = '
-            SELECT 
-                e.id_employee AS id, 
-                e.firstname, 
-                e.lastname, 
-                pl.name AS profile
-            FROM ' . _DB_PREFIX_ . 'employee e
-            LEFT JOIN ' . _DB_PREFIX_ . 'profile_lang pl ON e.id_profile = pl.id_profile AND pl.id_lang = ' . $id_lang . '
-            ORDER BY e.lastname ASC, e.firstname ASC
-        ';
-        return Db::getInstance()->executeS($sql);
+  private function getAllCommercials($onlyCommercials = false)
+{
+    $id_lang = (int)$this->context->language->id;
+    
+    $sql = '
+        SELECT 
+            e.id_employee AS id, 
+            e.firstname, 
+            e.lastname, 
+            pl.name AS profile
+        FROM ' . _DB_PREFIX_ . 'employee e
+        LEFT JOIN ' . _DB_PREFIX_ . 'profile_lang pl ON e.id_profile = pl.id_profile AND pl.id_lang = ' . $id_lang;
+    
+    // Filtrar solo comerciales si se especifica
+    if ($onlyCommercials) {
+        $sql .= ' WHERE LOWER(pl.name) LIKE "%comercial%" OR LOWER(pl.name) LIKE "%sales%" OR LOWER(pl.name) LIKE "%ventas%"';
     }
+    
+    $sql .= ' ORDER BY e.lastname ASC, e.firstname ASC';
+    
+    return Db::getInstance()->executeS($sql);
+}
 
     private function getAllClients()
     {
@@ -277,20 +414,51 @@ class Gestioncomerciales extends Module
         return Db::getInstance()->executeS($sql);
     }
 
-    private function getClientCommercialList()
+    private function getCommercialById($id_commercial)
     {
-        $sql = '
-            SELECT 
-                c.id_customer, 
-                c.firstname, 
-                c.lastname, 
-                e.firstname AS commercial_firstname, 
-                e.lastname AS commercial_lastname
-            FROM ' . _DB_PREFIX_ . 'customer c
-            LEFT JOIN ' . _DB_PREFIX_ . 'comerciales_clientes cc ON c.id_customer = cc.id_cliente
-            LEFT JOIN ' . _DB_PREFIX_ . 'employee e ON cc.id_comercial = e.id_employee
-            ORDER BY c.lastname ASC, c.firstname ASC
-        ';
-        return Db::getInstance()->executeS($sql);
+        $sql = 'SELECT * FROM `' . _DB_PREFIX_ . 'comerciales` WHERE `id` = ' . (int)$id_commercial;
+        return Db::getInstance()->getRow($sql);
     }
+
+    private function processAddOrEditCommercial()
+    {
+        $id_commercial = (int)Tools::getValue('id');
+        $data = [
+            'nombre_apellidos' => pSQL(Tools::getValue('nombre_apellidos')),
+            'telefono' => pSQL(Tools::getValue('telefono')),
+            'correo' => pSQL(Tools::getValue('correo')),
+            'observaciones' => pSQL(Tools::getValue('observaciones'))
+        ];
+
+        if ($id_commercial) {
+            Db::getInstance()->update('comerciales', $data, 'id = ' . $id_commercial);
+        } else {
+            Db::getInstance()->insert('comerciales', $data);
+        }
+
+        Tools::redirectAdmin(AdminController::$currentIndex . '&configure=' . $this->name . '&token=' . Tools::getAdminTokenLite('AdminModules'));
+    }
+
+    private function processDeleteCommercial($id_commercial)
+    {
+        Db::getInstance()->delete('comerciales', 'id = ' . (int)$id_commercial);
+    }
+
+     private function getClientCommercialList()
+{
+    $sql = '
+        SELECT 
+            c.`id_customer`, 
+            c.`firstname`, 
+            c.`lastname`, 
+            c.`email`,
+            e.`firstname` AS commercial_firstname, 
+            e.`lastname` AS commercial_lastname
+        FROM `' . _DB_PREFIX_ . 'customer` c
+        LEFT JOIN `' . _DB_PREFIX_ . 'comerciales_clientes` cc ON c.`id_customer` = cc.`id_cliente`
+        LEFT JOIN `' . _DB_PREFIX_ . 'employee` e ON cc.`id_comercial` = e.`id_employee`
+        ORDER BY c.`lastname` ASC, c.`firstname` ASC
+    ';
+    return Db::getInstance()->executeS($sql);
+}
 }
