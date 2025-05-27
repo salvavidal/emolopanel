@@ -28,6 +28,9 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
+use PrestaShop\PrestaShop\Core\Grid\Column\Type\Common\ActionColumn;
+use PrestaShop\PrestaShop\Core\Grid\Action\Row\Type\LinkRowAction;
+
 class Gestioncomerciales extends Module
 {
     protected $fields_value = []; 
